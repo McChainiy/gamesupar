@@ -51,6 +51,9 @@ textures = {'box': load_image('box.png'), 'grass': load_image('grass.png'),
 
 BLACK = pg.Color('black')
 WHITE = pg.Color('white')
+RED = pg.Color('red')
+GREEN = pg.Color(100, 250, 100)
+GREY = pg.Color('grey')
 
 image_size = textures['grass'].get_width()
 
@@ -147,8 +150,6 @@ class Board:
                         rx2 = self.width - 1 if rx2 >= self.width else rx2
                         for y in range(len(self.board))[ry1:ry2]:
                             for x in range(len(self.board[y]))[rx1:rx2]:
-                                if y == i and x == j:
-                                    continue
                                 if self.board[y][x].__class__ == Hero and\
                                         self.board[y][x].team == cur_cell.team:
                                     z.do_bonus(self.board[y][x])
@@ -184,17 +185,13 @@ class Board:
                                 minim = False
                                 for i in [-1, 0, 1]:
                                     for j in [-1, 0, 1]:
-                                        if not (0 <= x1 + j < self.width and 0 <= y1 + i < self.height):
+                                        if not (0 <= x1 + j < self.width and
+                                                0 <= y1 + i < self.height):
                                             continue
                                         cur = self.was[y1 + i][x1 + j]
                                         if cur > 0:
                                             if not minim or cur < minim:
-                                                print('da')
                                                 minim = cur
-
-                                print(minim + 1)
-                                for i in self.was:
-                                    print(*i, sep='\t')
                                 if minim and minim <= cur_cell.cur_movep and\
                                         not self.board[y1][x1].attacked:
                                     Highlight(self.get_pos([y1, x1]))
@@ -329,6 +326,23 @@ class Board:
             self.on_click(cell_pos)
         else:
             return False
+
+    def get_click2(self, mouse_pos):
+        if self.clicked:
+            self.abort()
+            return
+        cell_pos = self.get_cell(mouse_pos)
+        if cell_pos is not None:
+            self.myinf = self.board[cell_pos[0]][cell_pos[1]]
+            if self.myinf.__class__ == Hero and self.myinf.team == self.step:
+                self.myinf.show_inf()
+            else:
+                self.myinf = None
+
+    def get_click2_up(self):
+        if self.myinf is not None:
+            self.myinf.hide_inf()
+            self.myinf = None
 
     def has_path(self, x1, y1, dung=1, above=False):
         self.was[y1][x1] = 1
@@ -491,10 +505,24 @@ class Hero(pg.sprite.Sprite):
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
 
-    def check_bonus(self):
-        #for i in self.bonus:
-            #if i == 'range_attack'
-        pass
+    def show_inf(self):
+        self.textura = self.image
+        self.image = load_image('info_fon.png')
+        font = pg.font.SysFont('miriam', 14)
+        clr = WHITE if self.attacked else GREEN
+        text = font.render(str(self.dmg), 1, clr)
+        self.image.blit(text, (28, 10))
+        text = font.render(str(self.cur_movep), 1, (255, 255, 255))
+        self.image.blit(text, (28, 28))
+        self.healthbar.hide()
+        draw_sprites(['lines', 'highlights'])
+        pg.display.flip()
+
+    def hide_inf(self):
+        self.image = self.textura
+        self.healthbar.check_hp()
+        draw_sprites(['lines', 'highlights'])
+        pg.display.flip()
 
 
 class Bonus:
@@ -553,6 +581,9 @@ class Healthbar(pg.sprite.Sprite):
         text = font.render(str(self.owner.cur_hp), 1, (255, 255, 255))
         self.image.blit(text, (12, 1))
 
+    def hide(self):
+        self.image = pg.Surface((0, 0), pg.SRCALPHA, 32)
+
 
 class Button(pg.sprite.Sprite):
     def __init__(self, group, coords, meaning):
@@ -581,7 +612,6 @@ class Button(pg.sprite.Sprite):
             if self.clicked:
                 borda.change_step()
                 self.clicked = False
-
 
 
 class Highlight(pg.sprite.Sprite):
@@ -622,9 +652,9 @@ pg.mouse.set_visible(True)
 borda = Board([0, 0], image_size, len(mapa[0]), len(mapa))
 borda.render(mapa)
 
-borda.create_hero(heros, [0, 7], textures['medic'], 10, 100, 1, movep=3, bonus=[Bonus('heal', 3, 5)])
-borda.create_hero(heros, [1, 7], textures['archer'], 100, 100, 1, movep=3, attack_range=5)
-borda.create_hero(heros, [2, 7], textures['cavalry'], 120, 250, 1, movep=15)
+borda.create_hero(heros, [0, 7], textures['medic'], 1234, 100, 1, movep=3, bonus=[Bonus('heal', 3, 5)])
+borda.create_hero(heros, [1, 7], textures['archer'], 5678, 100, 1, movep=3, attack_range=5)
+borda.create_hero(heros, [2, 7], textures['cavalry'], 9011, 250, 1, movep=15)
 borda.create_hero(heros, [3, 7], textures['farmer'], 10, 100, 1, movep=3)
 borda.create_hero(heros, [4, 7], textures['moraler'], 10, 100, 1, movep=3)
 borda.create_hero(heros, [5, 2], textures['knight'], 10, 100,  1, movep=3)
@@ -653,13 +683,15 @@ while running:
                         i.get_click1(event.pos)
                     borda.abort()
             elif event.button == 3:
-                borda.abort()
+                borda.get_click2(event.pos)
             screen.fill(WHITE)
             draw_sprites()
         if event.type == pg.MOUSEBUTTONUP:
             if event.button == 1:
                 for i in buttons:
                     i.get_click2(event.pos)
+            elif event.button == 3:
+                borda.get_click2_up()
             draw_sprites()
         if event.type == pg.QUIT:
             terminate()
