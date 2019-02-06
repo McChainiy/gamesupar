@@ -35,7 +35,9 @@ def draw_sprites(forbidden=[]):
     if 'lines' not in forbidden:
         lines.draw(screen)
     heros.draw(screen)
+    castles.draw(screen)
     healthbars.draw(screen)
+    buttons.draw(screen)
 
 
 def terminate():
@@ -43,11 +45,12 @@ def terminate():
     sys.exit()
 
 
-textures = {'box': load_image('box.png'), 'grass': load_image('grass.png'),
+textures = {'box': load_image('box.png'), 'grass': load_image('grass2.png'),
             'knight': load_image('knight.png'), 'cavalry': load_image('cavalry.png'),
             'medic': load_image('medic.png'), 'sneaker': load_image('sneaker.png'),
             'farmer': load_image('farmer.png'), 'archer': load_image('archer.png'),
-            'moraler': load_image('moraler.png')}
+            'moraler': load_image('moraler.png'), 'sand': load_image('sand.png'),
+            'castle': load_image('castle.png')}
 
 BLACK = pg.Color('black')
 WHITE = pg.Color('white')
@@ -82,26 +85,37 @@ mapa = load_level('map1.txt')
 
 
 class Board:
-    def __init__(self, coords, cell_size, width, height):
-        self.width = width
-        self.height = height
-        self.left = coords[0]
+    def __init__(self, coords, cell_size, mapa):
+        mapa.insert(0, 's' * len(mapa[0]))
+        mapa.append('s' * len(mapa[0]))
+        for i in range(len(mapa)):
+            mapa[i] = 's' + mapa[i] + 's'
+        self.width = len(mapa[0])
+        self.height = len(mapa)
+        self.mapa = mapa
+        self.left = coords[0] - cell_size
         self.top = coords[1]
         self.cell_size = cell_size
         self.clicked = False
         self.step = 1
+        self.myinf = None
 
     def get_pos(self, coords):
         return [coords[1] * self.cell_size + self.left, coords[0] * self.cell_size + self.top]
 
     def create_hero(self, group, coords, texture, dmg, hp, team, movep=1, bonus=[], attack_range=1):
-        self.board[coords[0]][coords[1]] = \
-            Hero(group, [64 * coords[1], 64 * coords[0]], texture, dmg, hp, team,
-                 movep, bonus, attack_range)
+        self.board[coords[0] + 1][coords[1] + 1] = \
+            Hero(group, [64 * (coords[1] + 1)+ self.left, 64 * (coords[0] + 1) + self.top],
+                 texture, dmg, hp, team, movep, bonus, attack_range)
+
+    def create_castle(self, group, coords, texture, max_hp, team):
+        self.board[coords[0] + 1][coords[1] + 1] = \
+            Castle(group, [64 * (coords[1] + 1) + self.left, 64 * (
+                    coords[0] + 1) + self.top], texture, max_hp, team)
 
     def render(self, mapa):
         self.board = []
-        for c_i, i in enumerate(mapa):
+        for c_i, i in enumerate(self.mapa):
             self.board.append([])
             for c_j, j in enumerate(i):
                 if j == 'g':
@@ -111,6 +125,10 @@ class Board:
                 elif j == 'c' or j == 'o':
                     Ground(land, [self.left + c_j * self.cell_size,
                                   self.top + c_i * self.cell_size], textures['box'])
+                    self.board[-1].append(1)
+                elif j == 's':
+                    Ground(land, [self.left + c_j * self.cell_size,
+                                  self.top + c_i * self.cell_size], textures['sand'])
                     self.board[-1].append(1)
 
     def abort(self):
@@ -161,7 +179,7 @@ class Board:
                 self.clicked = cell_coords
                 self.was = [[0 for _ in range(self.width)] for _ in range(self.height)]
                 self.has_path(self.clicked[1], self.clicked[0])
-                if cur_cell.attacked == True:
+                if cur_cell.attacked:
                     return
                 if cur_cell.attack_range > 1:
                     ry1 = self.clicked[0] - cur_cell.attack_range
@@ -174,13 +192,13 @@ class Board:
                     rx2 = self.width - 1 if rx2 >= self.width else rx2
                     for y in range(len(self.board))[ry1:ry2]:
                         for x in range(len(self.board[y]))[rx1:rx2]:
-                            if self.board[y][x].__class__ == Hero and\
+                            if self.board[y][x].__class__ in [Hero, Castle] and\
                                     self.board[y][x].team != self.step:
                                 Highlight(self.get_pos([y, x]))
                 else:
                     for y1 in range(len(self.board)):
                         for x1 in range(len(self.board[y1])):
-                            if self.board[y1][x1].__class__ == Hero and (
+                            if self.board[y1][x1].__class__ in [Hero, Castle] and (
                                     self.board[y1][x1].team != cur_cell.team):
                                 minim = False
                                 for i in [-1, 0, 1]:
@@ -195,16 +213,22 @@ class Board:
                                 if minim and minim <= cur_cell.cur_movep and\
                                         not self.board[y1][x1].attacked:
                                     Highlight(self.get_pos([y1, x1]))
+            else:
+                return False
 
-        if self.clicked:
+        elif self.clicked:
             goal = self.board[cell_coords[0]][cell_coords[1]]
             if goal == 0:
                 self.make_movement(cell_coords)
                 self.abort()
-            elif goal.__class__ == Hero and goal.team\
+                return True
+            elif goal.__class__ in [Hero, Castle] and goal.team\
                     != self.board[self.clicked[0]][self.clicked[1]].team:
                 self.attack(cell_coords)
                 self.abort()
+                return True
+            else:
+                return False
 
     def attack(self, cell_coords):
         myhero = self.board[self.clicked[0]][self.clicked[1]]
@@ -218,7 +242,7 @@ class Board:
             if not self.was[cell_coords[0]][cell_coords[1]] <= myhero.attack_range:
                 return
         if myhero.cur_movep > 0 and not myhero.attacked:
-            enemy_died = self.board[cell_coords[0]][cell_coords[1]].get_damage(myhero.dmg)
+            enemy_died = self.board[cell_coords[0]][cell_coords[1]].get_damage(myhero)
             myhero.attacked = True
             myhero.cur_movep -= 1
             if enemy_died:
@@ -232,7 +256,7 @@ class Board:
                 else:
                     self.board[cell_coords[0]][cell_coords[1]] = 0
             screen.fill(pg.Color('white'))
-            all_sprites.draw(screen)
+            draw_sprites(['highlights', 'lines'])
             pg.display.flip()
 
     def make_movement(self, cell_coords, predel=None):
@@ -258,7 +282,7 @@ class Board:
             for i in healthbars:
                 i.move()
             screen.fill(pg.Color('white'))
-            all_sprites.draw(screen)
+            draw_sprites(['highlights', 'lines'])
             pg.display.flip()
             time.sleep(0.15)
             op -= 1
@@ -269,7 +293,7 @@ class Board:
         for i in lines:
             lines.remove(i)
         if self.board[self.clicked[0]][self.clicked[1]].attack_range > 1 and \
-                self.board[cell_coords[0]][cell_coords[1]].__class__ == Hero:
+                self.board[cell_coords[0]][cell_coords[1]].__class__ in [Hero, Castle]:
             draw_sprites()
             pg.display.flip()
             return
@@ -312,7 +336,7 @@ class Board:
         cell_pos = self.get_cell(mouse_pos)
         if cell_pos is not None:
             if self.board[cell_pos[0]][cell_pos[1]] == 0 or (self.board[cell_pos[0]][
-                cell_pos[1]].__class__ == Hero and (self.board[cell_pos[0]][cell_pos[1]
+                cell_pos[1]].__class__ in [Hero, Castle] and (self.board[cell_pos[0]][cell_pos[1]
                     ].team != self.board[self.clicked[0]][self.clicked[1]].team)):
                 self.show_way(cell_pos)
             else:
@@ -323,7 +347,7 @@ class Board:
     def get_click(self, mouse_pos):
         cell_pos = self.get_cell(mouse_pos)
         if cell_pos is not None:
-            self.on_click(cell_pos)
+            return self.on_click(cell_pos)
         else:
             return False
 
@@ -377,7 +401,7 @@ class Board:
         breaking = False
         minim = False
         copy_was = deepcopy(self.was)
-        if self.board[y1][x1].__class__ == Hero and (
+        if self.board[y1][x1].__class__ in [Hero, Castle] and (
             self.board[y1][x1].team != self.board[self.clicked[0]][self.clicked[1]].team):
             for i in [-1, 0, 1]:
                 for j in [-1, 0, 1]:
@@ -446,13 +470,20 @@ class Hero(pg.sprite.Sprite):
         self.healthbar = Healthbar(healthbars, self)
         self.attacked = False
         self.attack_range = attack_range
+        self.direction = team - 1
 
     def move(self, coords):
+        if self.rect.x < coords[0] and self.direction == 1:
+            self.direction = 0
+            self.image = pg.transform.flip(self.image, True, False)
+        elif self.rect.x > coords[0] and self.direction == 0:
+            self.direction = 1
+            self.image = pg.transform.flip(self.image, True, False)
         self.rect.x = coords[0]
         self.rect.y = coords[1]
 
-    def get_damage(self, damage):
-        self.cur_hp -= damage
+    def get_damage(self, hero):
+        self.cur_hp -= hero.dmg
         self.healthbar.check_hp()
         textura = []
         for i in range(image_size):
@@ -466,6 +497,12 @@ class Hero(pg.sprite.Sprite):
                         tipa_textura[0] = 255
 
                 self.image.set_at((j, i), tuple(tipa_textura))
+        if self.rect.x > hero.rect.x and hero.direction == 1:
+            hero.direction = 0
+            hero.image = pg.transform.flip(hero.image, True, False)
+        elif self.rect.x < hero.rect.x and hero.direction == 0:
+            hero.direction = 1
+            hero.image = pg.transform.flip(hero.image, True, False)
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
         time.sleep(0.3)
@@ -623,10 +660,90 @@ class Highlight(pg.sprite.Sprite):
         self.rect.y = coords[1]
 
 
+class Castle(pg.sprite.Sprite):
+    def __init__(self, group, coords, texture, max_hp, team):
+        super().__init__(group, all_sprites)
+        if team == 2:
+            self.image = pg.transform.flip(texture, True, False)
+        else:
+            self.image = texture
+        self.rect = self.image.get_rect()
+        self.rect.x = coords[0]
+        self.rect.y = coords[1]
+        self.max_hp = max_hp
+        self.cur_hp = max_hp
+        self.team = team
+        self.healthbar = Healthbar(healthbars, self)
+        self.attacked = False
+
+    def get_damage(self, hero):
+        self.cur_hp -= hero.dmg
+        self.healthbar.check_hp()
+        textura = []
+        for i in range(image_size):
+            textura.append([])
+            for j in range(image_size):
+                textura[-1].append(self.image.get_at((j, i)))
+                tipa_textura = list(textura[-1][-1])
+                if tipa_textura[-1] != 0:
+                    tipa_textura[0] += 200
+                    if tipa_textura[0] > 255:
+                        tipa_textura[0] = 255
+
+                self.image.set_at((j, i), tuple(tipa_textura))
+        if self.rect.x > hero.rect.x and hero.direction == 1:
+            hero.direction = 0
+            hero.image = pg.transform.flip(hero.image, True, False)
+        elif self.rect.x < hero.rect.x and hero.direction == 0:
+            hero.direction = 1
+            hero.image = pg.transform.flip(hero.image, True, False)
+        draw_sprites(['lines', 'highlights'])
+        pg.display.flip()
+        time.sleep(0.3)
+        for i in range(len(textura)):
+            for j in range(len(textura[i])):
+                self.image.set_at((j, i), textura[i][j])
+        draw_sprites(['lines', 'highlights'])
+        pg.display.flip()
+        if self.cur_hp <= 0:
+            castles.remove(self)
+            all_sprites.remove(self, self.healthbar)
+            healthbars.remove(self.healthbar)
+            name = 'КОМАНДОЙ СИНИХ' if self.team == 2 else 'КОМАНДОЙ КРАСНЫХ'
+            end_screen(name)
+            return True
+        return False
+
+
+def end_screen(name):
+    global running
+    running = False
+    text = ["ПОБЕДА", 'ЗА', name.upper()]
+    fon = pg.transform.scale(load_image('fon.jpg'), (width, height))
+    screen.blit(fon, (0, 0))
+    font = pg.font.SysFont('visitor', 140)
+    text_coord = [i + 100 for i in[25, 250, 500]]
+    text_coord2 = [400, 540, 100]
+    for i, line in enumerate(text):
+        rendered_string = font.render(line, 1, BLACK)
+        text_rect = rendered_string.get_rect()
+        text_rect.top = text_coord[i]
+        text_rect.x = text_coord2[i]
+        screen.blit(rendered_string, text_rect)
+
+    while True:
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                terminate()
+            if event.type == pg.KEYDOWN or event.type == pg.MOUSEBUTTONDOWN:
+                terminate()
+        pg.display.flip()
+
+
 running = True
 
 pg.init()
-width, height = size = [1280, 720]
+width, height = size = [1216, 820]
 screen = pg.display.set_mode(size)
 
 all_sprites = pg.sprite.Group()
@@ -636,8 +753,9 @@ healthbars = pg.sprite.Group()
 buttons = pg.sprite.Group()
 highlights = pg.sprite.Group()
 lines = pg.sprite.Group()
+castles = pg.sprite.Group()
 
-Button(buttons, [0, 500], 'turn')
+Button(buttons, [width // 2 - 96, 692], 'turn')
 
 screen.fill(WHITE)
 
@@ -649,26 +767,29 @@ pg.time.set_timer(ADDEVENT, 80)
 
 pg.mouse.set_visible(True)
 
-borda = Board([0, 0], image_size, len(mapa[0]), len(mapa))
+borda = Board([64, 0], image_size, mapa)
 borda.render(mapa)
 
-borda.create_hero(heros, [0, 7], textures['medic'], 1234, 100, 1, movep=3, bonus=[Bonus('heal', 3, 5)])
-borda.create_hero(heros, [1, 7], textures['archer'], 5678, 100, 1, movep=3, attack_range=5)
-borda.create_hero(heros, [2, 7], textures['cavalry'], 9011, 250, 1, movep=15)
-borda.create_hero(heros, [3, 7], textures['farmer'], 10, 100, 1, movep=3)
-borda.create_hero(heros, [4, 7], textures['moraler'], 10, 100, 1, movep=3)
-borda.create_hero(heros, [5, 2], textures['knight'], 10, 100,  1, movep=3)
-borda.create_hero(heros, [6, 2], textures['sneaker'], 10, 100, 1, movep=3)
+borda.create_hero(heros, [0, 3], textures['medic'], 1234, 100, 1, movep=3, bonus=[Bonus('heal', 3, 5)])
+borda.create_hero(heros, [1, 3], textures['archer'], 5678, 100, 1, movep=3, attack_range=5)
+borda.create_hero(heros, [2, 3], textures['cavalry'], 9011, 250, 1, movep=15)
+borda.create_hero(heros, [3, 3], textures['farmer'], 10, 100, 1, movep=3)
+borda.create_hero(heros, [4, 3], textures['moraler'], 10, 100, 1, movep=3)
+borda.create_hero(heros, [5, 3], textures['knight'], 10, 100,  1, movep=3)
+borda.create_hero(heros, [6, 3], textures['sneaker'], 10, 100, 1, movep=3)
+borda.create_castle(castles, [4, -1], textures['castle'], 100, 1)
 
-borda.create_hero(heros, [0, 8], textures['medic'], 10, 100, 2, movep=3)
-borda.create_hero(heros, [1, 8], textures['archer'], 10, 100, 2, movep=3, attack_range=5)
-borda.create_hero(heros, [2, 8], textures['cavalry'], 10, 100, 2, movep=3)
-borda.create_hero(heros, [3, 8], textures['farmer'], 10, 100, 2, movep=3)
-borda.create_hero(heros, [4, 8], textures['moraler'], 10, 100, 2, movep=3)
-borda.create_hero(heros, [5, 8], textures['knight'], 10, 100,  2, movep=3)
-borda.create_hero(heros, [6, 8], textures['sneaker'], 10, 100, 2, movep=3)
+borda.create_hero(heros, [0, 9], textures['medic'], 10, 100, 2, movep=3)
+borda.create_hero(heros, [1, 9], textures['archer'], 10, 100, 2, movep=3, attack_range=5)
+borda.create_hero(heros, [2, 9], textures['cavalry'], 101, 100, 2, movep=3)
+borda.create_hero(heros, [3, 9], textures['farmer'], 10, 100, 2, movep=3)
+borda.create_hero(heros, [4, 9], textures['moraler'], 10, 100, 2, movep=3)
+borda.create_hero(heros, [5, 9], textures['knight'], 10, 100,  2, movep=3)
+borda.create_hero(heros, [6, 9], textures['sneaker'], 10, 100, 2, movep=3)
+borda.create_castle(castles, [4, 17], textures['castle'], 100, 2)
 
 draw_sprites()
+pg.display.flip()
 
 while running:
     for event in pg.event.get():
@@ -695,4 +816,4 @@ while running:
             draw_sprites()
         if event.type == pg.QUIT:
             terminate()
-    pg.display.flip()
+        pg.display.flip()
