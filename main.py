@@ -146,17 +146,16 @@ class Board:
         return None
 
     def change_step(self):
+        for i in heros:
+            i.obnulyay()
         self.check_bonus()
         self.step = 2 if self.step == 1 else 1
-        for i in heros:
-            i.cur_movep = i.movep
-            i.attacked = False
 
     def check_bonus(self):
         for i in range(len(self.board)):
             for j in range(len(self.board[i])):
                 cur_cell = self.board[i][j]
-                if cur_cell.__class__ == Hero and cur_cell.team == self.step:
+                if cur_cell.__class__ == Hero:
                     for z in cur_cell.bonus:
                         ry1 = i - z.range
                         ry1 = 0 if ry1 < 0 else ry1
@@ -169,8 +168,7 @@ class Board:
                         for y in range(len(self.board))[ry1:ry2]:
                             for x in range(len(self.board[y]))[rx1:rx2]:
                                 if self.board[y][x].__class__ == Hero:
-                                    z.do_bonus(self.board[y][x],
-                                               self.board[y][x].team == cur_cell.team)
+                                    z.do_bonus(self.board[y][x], self.step, cur_cell)
 
     def on_click(self, cell_coords):
         if not self.clicked:
@@ -453,14 +451,14 @@ class Ground(pg.sprite.Sprite):
 class Hero(pg.sprite.Sprite):
     def __init__(self, group, coords, texture, dmg, max_hp, team, movep, bonus, attack_range):
         super().__init__(group, all_sprites)
-        if team == 2:
-            self.image = pg.transform.flip(texture, True, False)
-        else:
-            self.image = texture
+        self.image = pg.transform.flip(texture, True, False)
+        if team == 1:
+            self.image = pg.transform.flip(self.image, True, False)
         self.rect = self.image.get_rect()
         self.rect.x = coords[0]
         self.rect.y = coords[1]
         self.dmg = dmg
+        self.max_dmg = dmg
         self.max_hp = max_hp
         self.cur_hp = max_hp
         self.movep = movep
@@ -527,6 +525,11 @@ class Hero(pg.sprite.Sprite):
             return True
         return False
 
+    def obnulyay(self):
+        self.cur_movep = self.movep
+        self.dmg = self.max_dmg
+        self.attacked = False
+
     def get_heal(self, heal):
         self.cur_hp += heal
         self.cur_hp = self.max_hp if self.cur_hp > self.max_hp else self.cur_hp
@@ -577,14 +580,25 @@ class Bonus:
         self.range = range
         self.power = power
 
-    def do_bonus(self, hero, allies=True):
-        if self.name == 'heal':
-            if allies:
-                if hero.cur_hp != hero.max_hp:
-                    hero.get_heal(self.power)
-        if self.name == 'rot':
-            if not allies:
-                hero.get_damage(self.power, just_dmg=True)
+    def do_bonus(self, hero, step, giver):
+        allies = hero.team == giver.team
+        if hero.team == step:
+            if self.name == 'heal':
+                if allies:
+                    if hero.cur_hp != hero.max_hp:
+                        hero.get_heal(self.power)
+            if self.name == 'rot':
+                if not allies:
+                    hero.get_damage(self.power, just_dmg=True)
+        else:
+            if self.name == 'farm':
+                if allies:
+                    if hero != giver:
+                        hero.cur_movep += self.power
+            if self.name == 'moral_attack':
+                if allies:
+                    if hero != giver:
+                        hero.dmg += self.power
 
     def attack_bonus(self, attacker, defense):
         if self.name == 'siege':
@@ -593,6 +607,10 @@ class Bonus:
         if self.name == 'dmg_to_farmer':
             for i in defense.bonus:
                 if i.name == 'dmg_from_knight':
+                    return self.power
+        if self.name == 'sup_dmg':
+            for i in defense.bonus:
+                if i.name in ['farm', 'heal', 'moral_attack']:
                     return self.power
         return 0
 
@@ -796,35 +814,51 @@ pg.mouse.set_visible(True)
 borda = Board([64, 0], image_size, mapa)
 borda.render(mapa)
 
-# borda.create_hero(heros, [0, 3], textures['medic'], 1234, 100, 1, movep=3, bonus=[Bonus('heal', 3, 5)])
-# borda.create_hero(heros, [1, 3], textures['archer'], 10, 100, 1, movep=3, attack_range=5,
-#                   bonus=[Bonus('siege', 3, 10)])
-# borda.create_hero(heros, [2, 3], textures['cavalry'], 10, 250, 1, movep=15,
-#                   bonus=[Bonus('siege', 3, 90)])
-# borda.create_hero(heros, [3, 3], textures['farmer'], 10, 100, 1, movep=3)
-# borda.create_hero(heros, [4, 3], textures['moraler'], 10, 100, 1, movep=3)
-# borda.create_hero(heros, [5, 3], textures['knight'], 10, 100,  1, movep=5, bonus=[Bonus('dmg_to_farmer', 1, 30)])
-# borda.create_hero(heros, [6, 3], textures['sneaker'], 10, 100, 1, movep=3, bonus=[Bonus('rot', 3, 34)])
+
+borda.create_hero(heros, [1, 2], textures['cavalry'], 15, 120, 1, movep=5)
+borda.create_hero(heros, [7, 2], textures['cavalry'], 15, 120, 1, movep=5)
+
+borda.create_hero(heros, [2, 0], textures['archer'], 15, 80, 1, movep=3, attack_range=3)
+borda.create_hero(heros, [6, 0], textures['archer'], 15, 80, 1, movep=3, attack_range=3)
+
+borda.create_hero(heros, [3, 1], textures['knight'], 20, 120, 1, movep=3)
+borda.create_hero(heros, [5, 1], textures['knight'], 20, 120, 1, movep=3)
+
+borda.create_hero(heros, [5, 0], textures['farmer'], 5, 80, 1, movep=3, bonus=[Bonus('farm', 2, 1)])
+borda.create_hero(heros, [3, 0], textures['medic'], 5, 80, 1, movep=3, bonus=[Bonus('heal', 2, 10)])
+borda.create_hero(heros, [4, 2], textures['moraler'], 5, 80, 1, movep=3, bonus=[Bonus('moral_attack', 2, 15)])
+
+borda.create_hero(heros, [8, 0], textures['sneaker'], 10, 80, 1, movep=3, bonus=[Bonus('sup_dmg', 2, 35)])
 
 
-borda.create_hero(heros, [1, 2], textures['cavalry'], 10, 150, 1, movep=5)
-borda.create_hero(heros, [7, 2], textures['cavalry'], 10, 150, 1, movep=5)
+borda.create_hero(heros, [4, 0], textures['trebushet'], 10, 80, 1, movep=3,
+                  bonus=[Bonus('siege', 2, 20)], attack_range=2)
 
-borda.create_hero(heros, [1, 1], textures['archer'], 10, 100, 1, movep=3, attack_range=3)
-borda.create_hero(heros, [2, 1], textures['archer'], 10, 100, 1, movep=3, attack_range=3)
-borda.create_hero(heros, [7, 1], textures['archer'], 10, 100, 1, movep=3, attack_range=3)
-borda.create_hero(heros, [6, 1], textures['archer'], 10, 100, 1, movep=3, attack_range=3)
 borda.create_castle(castles, [4, -1], textures['castle'], 100, 1)
-#
-# borda.create_hero(heros, [0, 13], textures['medic'], 10, 100, 2, movep=3)
-# borda.create_hero(heros, [1, 13], textures['archer'], 10, 100, 2, movep=3, attack_range=5)
-# borda.create_hero(heros, [2, 13], textures['cavalry'], 10, 100, 2, movep=5)
-# borda.create_hero(heros, [3, 13], textures['farmer'], 10, 100, 2, movep=3, bonus=[Bonus('dmg_from_knight', 1)])
-# borda.create_hero(heros, [4, 13], textures['moraler'], 10, 100, 2, movep=3)
-# borda.create_hero(heros, [5, 13], textures['knight'], 10, 100,  2, movep=3)
-# borda.create_hero(heros, [6, 13], textures['trebushet'], 10, 100, 2, movep=3)
-borda.create_castle(castles, [4, 17], textures['castle'], 100, 2)
 
+# -----------------------------------------------------------------------------------------
+borda.create_hero(heros, [1, 14], textures['cavalry'], 15, 120, 2, movep=5)
+borda.create_hero(heros, [7, 14], textures['cavalry'], 15, 120, 2, movep=5)
+
+borda.create_hero(heros, [8, 15], textures['cavalry'], 15, 100, 2, movep=5)
+borda.create_hero(heros, [0, 15], textures['cavalry'], 15, 100, 2, movep=5)
+
+borda.create_hero(heros, [2, 16], textures['archer'], 15, 80, 2, movep=3, attack_range=3)
+borda.create_hero(heros, [6, 16], textures['archer'], 15, 80, 2, movep=3, attack_range=3)
+
+borda.create_hero(heros, [3, 15], textures['knight'], 20, 120, 2, movep=3)
+borda.create_hero(heros, [5, 15], textures['knight'], 20, 120, 2, movep=3)
+
+borda.create_hero(heros, [3, 16], textures['farmer'], 5, 80, 2, movep=3, bonus=[Bonus('farm', 2, 1)])
+borda.create_hero(heros, [5, 16], textures['medic'], 5, 80, 2, movep=3, bonus=[Bonus('heal', 2, 10)])
+borda.create_hero(heros, [4, 14], textures['moraler'], 5, 80, 2, movep=3, bonus=[Bonus('moral_attack', 2, 15)])
+
+borda.create_hero(heros, [0, 16], textures['sneaker'], 10, 80, 2, movep=4, bonus=[Bonus('sup_dmg', 2, 25)])
+
+
+borda.create_hero(heros, [4, 16], textures['trebushet'], 10, 80, 2, movep=3, bonus=[Bonus('siege', 2, 20)])
+
+borda.create_castle(castles, [4, 17], textures['castle'], 100, 2)
 
 
 draw_sprites()
