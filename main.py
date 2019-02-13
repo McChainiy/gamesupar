@@ -29,6 +29,7 @@ def load_level(filename):
 
 
 def draw_sprites(forbidden=[]):
+    screen.fill(GREY)
     buttons.draw(screen)
     land.draw(screen)
     if 'highlights' not in forbidden:
@@ -39,6 +40,8 @@ def draw_sprites(forbidden=[]):
     castles.draw(screen)
     healthbars.draw(screen)
     buttons.draw(screen)
+    #pg.draw.line(screen, RED, [960, 0], [960, 1080])
+    #pg.draw.line(screen, RED, [0, 540], [1920, 540])
 
 
 def terminate():
@@ -439,8 +442,8 @@ class Ground(pg.sprite.Sprite):
         self.texture_name = texture
 
     def change_res(self):
-        self.rect.x = self.coords[0] * image_size + borda.left
-        self.rect.y = self.coords[1] * image_size + borda.left
+        self.rect.x = self.coords[0] * image_size + camera.center[0] - borda.width * image_size // 2
+        self.rect.y = self.coords[1] * image_size + camera.center[1] - borda.height * image_size // 2
 
 
 class Hero(pg.sprite.Sprite):
@@ -467,8 +470,8 @@ class Hero(pg.sprite.Sprite):
         self.texture_name = texture
 
     def change_res(self):
-        self.rect.x = self.coords[1] * image_size + borda.left
-        self.rect.y = self.coords[0] * image_size + borda.left
+        self.rect.x = self.coords[1] * image_size + camera.center[0] - borda.width * image_size // 2
+        self.rect.y = self.coords[0] * image_size + camera.center[1] - borda.height * image_size // 2
 
     def move(self, coords):
         if self.coords[1] < coords[1] and self.direction == 1:
@@ -561,7 +564,7 @@ class Hero(pg.sprite.Sprite):
                                         [128 // camera.boost, 128 // camera.boost])
         font = pg.font.SysFont('miriam', int(0.21 * image_size))
         clr = WHITE if self.attacked else GREEN
-        text = font.render(str(self.dmg), 0, clr)
+        text = font.render(str(self.dmg), 0, pg.Color('blue'))
         self.image.blit(text, (int(0.43 * image_size), int(0.15 * image_size)))
         text = font.render(str(self.cur_movep), 0, WHITE)
         self.image.blit(text, (int(0.43 * image_size), int(0.43 * image_size)))
@@ -700,7 +703,7 @@ class Button(pg.sprite.Sprite):
 class Highlight(pg.sprite.Sprite):
     def __init__(self, coords):
         super().__init__(highlights)
-        self.image = highlight
+        self.image = pg.transform.scale(highlight, [128 // camera.boost, 128 // camera.boost])
         self.rect = self.image.get_rect()
         self.rect.x = coords[0]
         self.rect.y = coords[1]
@@ -724,8 +727,9 @@ class Castle(pg.sprite.Sprite):
         self.texture_name = texture
 
     def change_res(self):
-        self.rect.x = self.coords[1] * image_size + borda.left
-        self.rect.y = self.coords[0] * image_size + borda.left
+        print('ya')
+        self.rect.x = self.coords[1] * image_size + camera.center[0] - borda.width * image_size // 2
+        self.rect.y = self.coords[0] * image_size + camera.center[1] - borda.height * image_size // 2
 
     def get_damage(self, hero):
         multi = 0
@@ -771,6 +775,7 @@ class Castle(pg.sprite.Sprite):
 class Camera:
     def __init__(self):
         self.boost = 2
+        self.center = [960, 540]
 
     def apply(self, obj):
         pass
@@ -785,13 +790,35 @@ class Camera:
     def update_hp(self, obj):
         obj.move()
 
-    def zoom(self):
+    def zoom(self, pos):
         if self.boost < 5:
             self.boost += 1
+            r_x, r_y = camera.center[0] - 960, camera.center[1] - 540
+            camera.center[0] = camera.center[0] - r_x // camera.boost
+            camera.center[1] = camera.center[1] - r_y // camera.boost
+            return True
+        return False
 
-    def unzoom(self):
+    def unzoom(self, pos):
         if self.boost > 1:
             self.boost -= 1
+            r_x, r_y = camera.center[0] - pos[0], camera.center[1] - pos[1]
+            camera.center[0] = camera.center[0] + r_x // camera.boost
+            camera.center[1] = camera.center[1] + r_y // camera.boost
+            return True
+        return False
+
+    def go_left(self):
+        self.center[0] += 10
+
+    def go_right(self):
+        self.center[0] -= 10
+
+    def go_up(self):
+        self.center[1] += 10
+
+    def go_down(self):
+        self.center[1] -= 10
 
 
 def end_screen(name):
@@ -823,6 +850,7 @@ def end_screen(name):
 
 def cam_update():
     global image_size
+    print(camera.center)
     image_size = 128 // camera.boost
     for x in [heros, castles, land]:
         for i in x:
@@ -856,7 +884,7 @@ MYEVENTTYPE = 19
 ADDEVENT = 10
 speed = 1000
 
-pg.time.set_timer(ADDEVENT, 80)
+pg.time.set_timer(ADDEVENT, 30)
 
 pg.mouse.set_visible(True)
 
@@ -894,7 +922,7 @@ borda.create_hero(heros, [4, 14], 'moraler', 5, 80, 2, movep=3,
                   bonus=[Bonus('moral_attack', 2, 15)])
 borda.create_hero(heros, [0, 16], 'sneaker', 10, 80, 2, movep=4,
                   bonus=[Bonus('sup_dmg', 2, 25)])
-borda.create_hero(heros, [4, 16], 'trebushet', 10, 80, 2, movep=3,
+borda.create_hero(heros, [4, 1], 'trebushet', 10, 80, 2, movep=3,
                   bonus=[Bonus('siege', 2, 20)], attack_range=3)
 borda.create_castle(castles, [4, 17], 'castle', 100, 2)
 
@@ -919,14 +947,13 @@ while running:
             elif event.button == 3:
                 borda.get_click2(event.pos)
             elif event.button == 5:
-                camera.zoom()
-                cam_update()
+                if camera.zoom(event.pos):
+                    cam_update()
                 borda.abort()
             elif event.button == 4:
-                camera.unzoom()
-                cam_update()
+                if camera.unzoom(event.pos):
+                    cam_update()
                 borda.abort()
-            screen.fill(GREY)
             draw_sprites()
         if event.type == pg.MOUSEBUTTONUP:
             if event.button == 1:
@@ -941,4 +968,23 @@ while running:
         if event.type == pg.KEYDOWN:
             if event.key == pg.K_ESCAPE:
                 terminate()
+
+        if event.type == ADDEVENT:
+            mouse_pos = pg.mouse.get_pos()
+            if 0 <= mouse_pos[0] < 50:
+                camera.go_left()
+                cam_update()
+                draw_sprites()
+            if 0 <= mouse_pos[0] > 1870:
+                camera.go_right()
+                cam_update()
+                draw_sprites()
+            if 0 <= mouse_pos[1] < 50:
+                camera.go_up()
+                cam_update()
+                draw_sprites()
+            if 0 <= mouse_pos[1] > 1030:
+                camera.go_down()
+                cam_update()
+                draw_sprites()
         pg.display.flip()
