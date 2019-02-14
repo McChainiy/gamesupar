@@ -786,8 +786,8 @@ def end_screen(name):
 running = True
 
 pg.init()
-width, height = size = [1216, 820]
-screen = pg.display.set_mode(size)
+width, height = size = [1920, 1080]
+screen = pg.display.set_mode(size, pg.FULLSCREEN)
 
 all_sprites = pg.sprite.Group()
 land = pg.sprite.Group()
@@ -798,7 +798,7 @@ highlights = pg.sprite.Group()
 lines = pg.sprite.Group()
 castles = pg.sprite.Group()
 
-Button(buttons, [width // 2 - 96, 692], 'turn')
+Button(buttons, [width // 2 - 96, 892], 'turn')
 
 screen.fill(WHITE)
 
@@ -810,7 +810,7 @@ pg.time.set_timer(ADDEVENT, 80)
 
 pg.mouse.set_visible(True)
 
-borda = Board([64, 0], image_size, mapa)
+borda = Board([400, 128], image_size, mapa)
 borda.render(mapa)
 
 
@@ -890,6 +890,9 @@ while running:
             elif event.button == 3:
                 borda.get_click2_up()
             draw_sprites()
+        if event.type == pg.KEYDOWN:
+            if event.key == pg.K_ESCAPE:
+                terminate()
         if event.type == pg.QUIT:
             terminate()
         pg.display.flip()
