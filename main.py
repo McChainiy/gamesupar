@@ -191,7 +191,7 @@ class Board:
                         for x in range(len(self.board[y]))[rx1:rx2]:
                             if self.board[y][x].__class__ in [Hero, Castle] and\
                                     self.board[y][x].team != self.step:
-                                Highlight(self.get_pos([y, x]))
+                                Highlight([y, x])
                 else:
                     for y1 in range(len(self.board)):
                         for x1 in range(len(self.board[y1])):
@@ -444,6 +444,8 @@ class Ground(pg.sprite.Sprite):
     def change_res(self):
         self.rect.x = self.coords[0] * image_size + camera.center[0] - borda.width * image_size // 2
         self.rect.y = self.coords[1] * image_size + camera.center[1] - borda.height * image_size // 2
+        self.image = pg.transform.scale(
+            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
         return [self.rect.x, self.rect.y]
 
 
@@ -454,6 +456,7 @@ class Hero(pg.sprite.Sprite):
         if team == 1:
             self.image = pg.transform.flip(self.image, True, False)
         self.rect = self.image.get_rect()
+        self.texture_name = texture
         self.coords = coords
         self.change_res()
         self.dmg = dmg
@@ -468,11 +471,12 @@ class Hero(pg.sprite.Sprite):
         self.attacked = False
         self.attack_range = attack_range
         self.direction = team - 1
-        self.texture_name = texture
 
     def change_res(self):
         self.rect.x = self.coords[1] * image_size + camera.center[0] - borda.width * image_size // 2
         self.rect.y = self.coords[0] * image_size + camera.center[1] - borda.height * image_size // 2
+        self.image = pg.transform.scale(
+            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
 
     def move(self, coords):
         if self.coords[1] < coords[1] and self.direction == 1:
@@ -632,6 +636,7 @@ class Lines(pg.sprite.Sprite):
         self.direction = direction
         self.coords = coords
         self.change_res()
+
     def rotate(self, coords):
         if 'right' in self.direction:
             self.rect.x = coords[0] + image_size * 3 // 4
@@ -736,17 +741,19 @@ class Castle(pg.sprite.Sprite):
             self.image = textures[texture]
         self.rect = self.image.get_rect()
         self.coords = coords
+        self.texture_name = texture
         self.change_res()
         self.max_hp = max_hp
         self.cur_hp = max_hp
         self.team = team
         self.healthbar = Healthbar(healthbars, self)
         self.attacked = False
-        self.texture_name = texture
 
     def change_res(self):
         self.rect.x = self.coords[1] * image_size + camera.center[0] - borda.width * image_size // 2
         self.rect.y = self.coords[0] * image_size + camera.center[1] - borda.height * image_size // 2
+        self.image = pg.transform.scale(
+            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
 
     def get_damage(self, hero):
         multi = 0
@@ -804,9 +811,6 @@ class Camera:
                 borda.left = a[0]
             if not borda.top or a[1] < borda.top:
                 borda.top = a[1]
-        ch_size = 128 // self.boost
-        if obj.__class__ != Highlight:
-            obj.image = pg.transform.scale(textures[obj.texture_name], [ch_size, ch_size])
         if obj.__class__ == Hero and obj.direction == 1:
             obj.image = pg.transform.flip(obj.image, True, False)
 
@@ -886,10 +890,10 @@ def cam_update():
 running = True
 
 pg.init()
-width, height = size = [1920, 1080]
-#width, height = size = [1080, 720]
-screen = pg.display.set_mode(size, pg.FULLSCREEN)
-#screen = pg.display.set_mode(size)
+#width, height = size = [1920, 1080]
+width, height = size = [1080, 720]
+#screen = pg.display.set_mode(size, pg.FULLSCREEN)
+screen = pg.display.set_mode(size)
 
 camera = Camera()
 
@@ -933,6 +937,8 @@ borda.create_hero(heros, [8, 0], 'sneaker', 10, 80, 1, movep=4,
 borda.create_hero(heros, [4, 0], 'trebushet', 10, 80, 1, movep=3,
                   bonus=[Bonus('siege', 2, 20)], attack_range=3)
 borda.create_castle(castles, [4, -1], 'castle', 100, 1)
+
+borda.create_hero(heros, [1, 3  ], 'cavalry', 15, 120, 2, movep=5)
 # -----------------------------------------------------------------------------------------
 borda.create_hero(heros, [1, 14], 'cavalry', 15, 120, 2, movep=5)
 borda.create_hero(heros, [7, 14], 'cavalry', 15, 120, 2, movep=5)
