@@ -10,7 +10,7 @@ def load_image(name, colorkey=None):
     try:
         image = pg.image.load(fullname)
         if colorkey == -2:
-            image = image.convert_alpha()
+            image.convert_alpha()
         elif colorkey is not None:
             if colorkey == -1:
                 colorkey = image.get_at((0, 0))
@@ -40,8 +40,6 @@ def draw_sprites(forbidden=[]):
     castles.draw(screen)
     healthbars.draw(screen)
     buttons.draw(screen)
-    #pg.draw.line(screen, RED, [960, 0], [960, 1080])
-    #pg.draw.line(screen, RED, [0, 540], [1920, 540])
 
 
 def terminate():
@@ -52,7 +50,8 @@ def terminate():
 textures = {'box': load_image('box.png'), 'grass': load_image('grass.png'),
             'knight': load_image('knight.png'), 'cavalry': load_image('cavalry.png'),
             'medic': load_image('medic.png'), 'sneaker': load_image('sneaker.png'),
-            'farmer': load_image('farmer.png'), 'archer': load_image('archer.png'),
+            'farmer': load_image('farmer.png'),# 'archer': pg.transform.scale(load_image('archer2.png'), [128, 128]),
+            'archer': load_image('archer.png', -1),
             'moraler': load_image('moraler.png'), 'sand': load_image('sand.png'),
             'castle': load_image('castle.png'), 'trebushet': load_image('trebushet.png', -1)}
 
@@ -81,9 +80,9 @@ highlight.fill(pg.Color('yellow'))
 
 for i in range(image_size):
     for j in range(image_size):
-        tipa_textura = list(highlight.get_at((j, i)))
-        tipa_textura[-1] = 180
-        highlight.set_at((j, i), tuple(tipa_textura))
+        stipa_textura = list(highlight.get_at((j, i)))
+        stipa_textura[-1] = 180
+        highlight.set_at((j, i), tuple(stipa_textura))
 
 mapa = load_level('map1.txt')
 
@@ -174,7 +173,6 @@ class Board:
             cur_cell = self.board[cell_coords[0]][cell_coords[1]]
             if cur_cell.__class__ == Hero and cur_cell.team == self.step and cur_cell.cur_movep != 0:
                 self.clicked = cell_coords
-                self.was = [[0 for _ in range(self.width)] for _ in range(self.height)]
                 self.has_path(self.clicked[1], self.clicked[0])
                 if cur_cell.attacked:
                     return
@@ -235,8 +233,8 @@ class Board:
                 return
             myhero = self.board[new_coords[0]][new_coords[1]]
         else:
-            self.has_path(self.clicked[1], self.clicked[0])
-            if not self.was[cell_coords[0]][cell_coords[1]] <= myhero.attack_range:
+            self.has_path(self.clicked[1], self.clicked[0], above=True)
+            if self.was[cell_coords[0]][cell_coords[1]] - 1 > myhero.attack_range:
                 return
         if myhero.cur_movep > 0 and not myhero.attacked:
             enemy_died = self.board[cell_coords[0]][cell_coords[1]].get_damage(myhero)
@@ -361,7 +359,9 @@ class Board:
             self.myinf = None
 
     def has_path(self, x1, y1, dung=1, above=False):
+        self.was = [[0 for _ in range(self.width)] for _ in range(self.height)]
         self.was[y1][x1] = 1
+
 
         last_was = False
         while True:
@@ -378,9 +378,7 @@ class Board:
                                     continue
                                 if i == j == 0:
                                     continue
-                                if (self.board[new_y][new_x] == 1 or \
-                                        (self.board[new_y][new_x].__class__ == Hero and
-                                 [new_y, new_x] != [y1, x1])) and not above:
+                                if (self.board[new_y][new_x] == 1 or (self.board[new_y][new_x].__class__ == Hero and [new_y, new_x] != [y1, x1] and not above)):
                                     self.was[new_y][new_x] = -1
                                     continue
                                 if self.was[new_y][new_x] == 0:
@@ -500,17 +498,13 @@ class Hero(pg.sprite.Sprite):
             if self.cur_hp <= 0:
                 self.cur_hp = 1
         self.healthbar.check_hp()
-        textura = []
         for i in range(image_size):
-            textura.append([])
             for j in range(image_size):
-                textura[-1].append(self.image.get_at((j, i)))
-                tipa_textura = list(textura[-1][-1])
+                tipa_textura = list(self.image.get_at((j, i)))
                 if tipa_textura[-1] != 0:
                     tipa_textura[0] += 200
                     if tipa_textura[0] > 255:
                         tipa_textura[0] = 255
-
                 self.image.set_at((j, i), tuple(tipa_textura))
         if not just_dmg:
             if self.rect.x > hero.rect.x and hero.direction == 1:
@@ -522,9 +516,10 @@ class Hero(pg.sprite.Sprite):
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
         time.sleep(0.3)
-        for i in range(len(textura)):
-            for j in range(len(textura[i])):
-                self.image.set_at((j, i), textura[i][j])
+        self.image = pg.transform.scale(
+            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
+        if self.direction == 1:
+            self.image = pg.transform.flip(self.image, True, False)
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
         if self.cur_hp <= 0:
@@ -761,12 +756,9 @@ class Castle(pg.sprite.Sprite):
             multi += i.attack_bonus(hero, self)
         self.cur_hp -= (hero.dmg + multi)
         self.healthbar.check_hp()
-        textura = []
         for i in range(image_size):
-            textura.append([])
             for j in range(image_size):
-                textura[-1].append(self.image.get_at((j, i)))
-                tipa_textura = list(textura[-1][-1])
+                tipa_textura = list(self.image.get_at((j, i)))
                 if tipa_textura[-1] != 0:
                     tipa_textura[0] += 200
                     if tipa_textura[0] > 255:
@@ -782,9 +774,8 @@ class Castle(pg.sprite.Sprite):
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
         time.sleep(0.3)
-        for i in range(len(textura)):
-            for j in range(len(textura[i])):
-                self.image.set_at((j, i), textura[i][j])
+        self.image = pg.transform.scale(
+            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
         if self.cur_hp <= 0:
@@ -890,10 +881,10 @@ def cam_update():
 running = True
 
 pg.init()
-#width, height = size = [1920, 1080]
-width, height = size = [1080, 720]
-#screen = pg.display.set_mode(size, pg.FULLSCREEN)
-screen = pg.display.set_mode(size)
+width, height = size = [1920, 1080]
+#width, height = size = [1080, 720]
+screen = pg.display.set_mode(size, pg.FULLSCREEN)
+#screen = pg.display.set_mode(size)
 
 camera = Camera()
 
@@ -935,8 +926,8 @@ borda.create_hero(heros, [4, 2], 'moraler', 5, 80, 1, movep=3,
 borda.create_hero(heros, [8, 0], 'sneaker', 10, 80, 1, movep=4,
                   bonus=[Bonus('sup_dmg', 2, 25)])
 borda.create_hero(heros, [4, 0], 'trebushet', 10, 80, 1, movep=3,
-                  bonus=[Bonus('siege', 2, 20)], attack_range=3)
-borda.create_castle(castles, [4, -1], 'castle', 100, 1)
+                  bonus=[Bonus('siege', 2, 20)], attack_range=2)
+borda.create_castle(castles, [4, -1], 'castle', 150, 1)
 
 borda.create_hero(heros, [1, 3  ], 'cavalry', 15, 120, 2, movep=5)
 # -----------------------------------------------------------------------------------------
@@ -955,8 +946,8 @@ borda.create_hero(heros, [4, 14], 'moraler', 5, 80, 2, movep=3,
 borda.create_hero(heros, [0, 16], 'sneaker', 10, 80, 2, movep=4,
                   bonus=[Bonus('sup_dmg', 2, 25)])
 borda.create_hero(heros, [4, 1], 'trebushet', 10, 80, 2, movep=3,
-                  bonus=[Bonus('siege', 2, 20)], attack_range=3)
-borda.create_castle(castles, [4, 17], 'castle', 100, 2)
+                  bonus=[Bonus('siege', 2, 20)], attack_range=2)
+borda.create_castle(castles, [4, 17], 'castle', 150, 2)
 
 cam_update()
 
