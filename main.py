@@ -14,7 +14,6 @@ def load_image(name, colorkey=None):
         elif colorkey is not None:
             if colorkey == -1:
                 colorkey = image.get_at((0, 0))
-                print(colorkey)
             image.set_colorkey(colorkey)
         return image
     except pg.error:
@@ -31,13 +30,13 @@ def load_level(filename):
 def draw_sprites(forbidden=[]):
     screen.fill(GREY)
     buttons.draw(screen)
-    land.draw(screen)
+    p_land.draw(screen)
     if 'highlights' not in forbidden:
         highlights.draw(screen)
     if 'lines' not in forbidden:
         lines.draw(screen)
-    heros.draw(screen)
-    castles.draw(screen)
+    p_heros.draw(screen)
+    p_castles.draw(screen)
     healthbars.draw(screen)
     buttons.draw(screen)
 
@@ -50,10 +49,25 @@ def terminate():
 textures = {'box': load_image('box.png'), 'grass': load_image('grass.png'),
             'knight': load_image('knight.png'), 'cavalry': load_image('cavalry.png'),
             'medic': load_image('medic.png'), 'sneaker': load_image('sneaker.png'),
-            'farmer': load_image('farmer.png'),# 'archer': pg.transform.scale(load_image('archer2.png'), [128, 128]),
+            'farmer': load_image('farmer.png'),
             'archer': load_image('archer.png', -1),
             'moraler': load_image('moraler.png'), 'sand': load_image('sand.png'),
             'castle': load_image('castle.png'), 'trebushet': load_image('trebushet.png', -1)}
+
+textures.update({'castle': [pg.transform.scale(textures['castle'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'cavalry': [pg.transform.scale(textures['cavalry'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'knight': [pg.transform.scale(textures['knight'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'archer': [pg.transform.scale(textures['archer'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'medic': [pg.transform.scale(textures['medic'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'moraler': [pg.transform.scale(textures['moraler'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'farmer': [pg.transform.scale(textures['farmer'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'sneaker': [pg.transform.scale(textures['sneaker'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'trebushet': [pg.transform.scale(textures['trebushet'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'grass': [pg.transform.scale(textures['grass'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'sand': [pg.transform.scale(textures['sand'], [128 // i, 128 // i]) for i in range(1, 6)]})
+textures.update({'box': [pg.transform.scale(textures['box'], [128 // i, 128 // i]) for i in range(1, 6)]})
+
+print(textures)
 
 BLACK = pg.Color('black')
 WHITE = pg.Color('white')
@@ -61,7 +75,7 @@ RED = pg.Color('red')
 GREEN = pg.Color('green')
 GREY = pg.Color('grey')
 
-image_size = textures['grass'].get_width()
+image_size = textures['grass'][0].get_width()
 
 right_i = load_image('line_r.png', WHITE)
 
@@ -84,7 +98,8 @@ for i in range(image_size):
         stipa_textura[-1] = 180
         highlight.set_at((j, i), tuple(stipa_textura))
 
-mapa = load_level('map1.txt')
+mapa = load_level('map2.txt')
+print(len(mapa), len(mapa[0]))
 
 
 class Board:
@@ -185,6 +200,7 @@ class Board:
                     rx1 = 0 if rx1 < 0 else rx1
                     rx2 = self.clicked[1] + cur_cell.attack_range + 1
                     rx2 = self.width if rx2 >= self.width else rx2
+                    print(ry1, ry2, rx1, rx2)
                     for y in range(len(self.board))[ry1:ry2]:
                         for x in range(len(self.board[y]))[rx1:rx2]:
                             if self.board[y][x].__class__ in [Hero, Castle] and\
@@ -233,7 +249,8 @@ class Board:
                 return
             myhero = self.board[new_coords[0]][new_coords[1]]
         else:
-            self.has_path(self.clicked[1], self.clicked[0], above=True)
+            self.has_path(self.clicked[1], self.clicked[0], above=True, goal=
+            [cell_coords[0], cell_coords[1]])
             if self.was[cell_coords[0]][cell_coords[1]] - 1 > myhero.attack_range:
                 return
         if myhero.cur_movep > 0 and not myhero.attacked:
@@ -254,6 +271,7 @@ class Board:
             pg.display.flip()
 
     def make_movement(self, cell_coords, predel=None):
+        self.has_path(self.clicked[1], self.clicked[0], goal=cell_coords)
         back_way = self.get_back(cell_coords[1], cell_coords[0],
                                  self.clicked[1], self.clicked[0])
         if not back_way:
@@ -280,6 +298,7 @@ class Board:
         return [last[0], last[1]]
 
     def show_way(self, cell_coords):
+        self.has_path(self.clicked[1], self.clicked[0], goal=cell_coords)
         for i in lines:
             lines.remove(i)
         if self.board[self.clicked[0]][self.clicked[1]].attack_range > 1 and \
@@ -358,15 +377,20 @@ class Board:
             self.myinf.hide_inf()
             self.myinf = None
 
-    def has_path(self, x1, y1, dung=1, above=False):
+    def has_path(self, x1, y1, dung=1, above=False, goal=None):
         self.was = [[0 for _ in range(self.width)] for _ in range(self.height)]
         self.was[y1][x1] = 1
-
 
         last_was = False
         while True:
             if last_was == self.was:
                 break
+            if goal is not None:
+                if self.was[goal[0]][goal[1]] != 0:
+                    break
+            else:
+                if self.board[y1][x1].cur_movep + self.board[y1][x1].attack_range + 1 < dung:
+                    break
             last_was = deepcopy(self.was)
             for r_cnt, row in enumerate(self.was):
                 for c_cnt, col in enumerate(row):
@@ -378,7 +402,9 @@ class Board:
                                     continue
                                 if i == j == 0:
                                     continue
-                                if (self.board[new_y][new_x] == 1 or (self.board[new_y][new_x].__class__ == Hero and [new_y, new_x] != [y1, x1] and not above)):
+                                if (self.board[new_y][new_x] == 1 or
+                                        (self.board[new_y][new_x].__class__ == Hero and
+                                         [new_y, new_x] != [y1, x1] and not above)):
                                     self.was[new_y][new_x] = -1
                                     continue
                                 if self.was[new_y][new_x] == 0:
@@ -434,23 +460,26 @@ class Board:
 class Ground(pg.sprite.Sprite):
     def __init__(self, group, coords, texture):
         super().__init__(group, all_sprites)
-        self.image = textures[texture]
+        self.image = textures[texture][0]
         self.rect = self.image.get_rect()
         self.coords = coords
         self.texture_name = texture
 
     def change_res(self):
+        global p_land
         self.rect.x = self.coords[0] * image_size + camera.center[0] - borda.width * image_size // 2
         self.rect.y = self.coords[1] * image_size + camera.center[1] - borda.height * image_size // 2
-        self.image = pg.transform.scale(
-            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
+        if not (self.rect.x > width or 0 > self.rect.x + image_size or
+                self.rect.y > height or 0 > self.rect.y + image_size):
+            self.image = textures[self.texture_name][camera.boost - 1]
+            p_land.add(self)
         return [self.rect.x, self.rect.y]
 
 
 class Hero(pg.sprite.Sprite):
     def __init__(self, group, coords, texture, dmg, max_hp, team, movep, bonus, attack_range):
         super().__init__(group, all_sprites)
-        self.image = pg.transform.flip(textures[texture], True, False)
+        self.image = pg.transform.flip(textures[texture][0], True, False)
         if team == 1:
             self.image = pg.transform.flip(self.image, True, False)
         self.rect = self.image.get_rect()
@@ -471,10 +500,13 @@ class Hero(pg.sprite.Sprite):
         self.direction = team - 1
 
     def change_res(self):
+        global p_heros
         self.rect.x = self.coords[1] * image_size + camera.center[0] - borda.width * image_size // 2
         self.rect.y = self.coords[0] * image_size + camera.center[1] - borda.height * image_size // 2
-        self.image = pg.transform.scale(
-            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
+        if not (self.rect.x > width or 0 > self.rect.x + image_size or
+                self.rect.y > height or 0 > self.rect.y + image_size):
+            self.image = self.image = textures[self.texture_name][camera.boost - 1]
+            p_heros.add(self)
 
     def move(self, coords):
         if self.coords[1] < coords[1] and self.direction == 1:
@@ -516,8 +548,7 @@ class Hero(pg.sprite.Sprite):
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
         time.sleep(0.3)
-        self.image = pg.transform.scale(
-            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
+        self.image = textures[self.texture_name][camera.boost - 1]
         if self.direction == 1:
             self.image = pg.transform.flip(self.image, True, False)
         draw_sprites(['lines', 'highlights'])
@@ -574,7 +605,7 @@ class Hero(pg.sprite.Sprite):
 
     def hide_inf(self):
         self.image = self.textura
-        cam_update()
+        camera.update()
         self.healthbar.check_hp()
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
@@ -664,9 +695,13 @@ class Healthbar(pg.sprite.Sprite):
         self.move()
 
     def move(self):
+        global p_healthbars
         self.rect.x = self.owner.rect.x + image_size // 8
         self.rect.y = self.owner.rect.y + image_size * 4 // 5
-        self.check_hp()
+        if not (self.rect.x > width or 0 > self.rect.x + image_size or
+                self.rect.y > height or 0 > self.rect.y + image_size):
+            p_healthbars.add(self)
+            self.check_hp()
 
     def check_hp(self):
         length = int(0.75 * image_size) * self.owner.cur_hp // self.owner.max_hp
@@ -731,9 +766,9 @@ class Castle(pg.sprite.Sprite):
     def __init__(self, group, coords, texture, max_hp, team):
         super().__init__(group, all_sprites)
         if team == 2:
-            self.image = pg.transform.flip(textures[texture], True, False)
+            self.image = pg.transform.flip(textures[texture][0], True, False)
         else:
-            self.image = textures[texture]
+            self.image = textures[texture][0]
         self.rect = self.image.get_rect()
         self.coords = coords
         self.texture_name = texture
@@ -745,10 +780,13 @@ class Castle(pg.sprite.Sprite):
         self.attacked = False
 
     def change_res(self):
+        global p_castles
         self.rect.x = self.coords[1] * image_size + camera.center[0] - borda.width * image_size // 2
         self.rect.y = self.coords[0] * image_size + camera.center[1] - borda.height * image_size // 2
-        self.image = pg.transform.scale(
-            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
+        if not (self.rect.x > width or 0 > self.rect.x + image_size or
+                self.rect.y > height or 0 > self.rect.y + image_size):
+            self.image = self.image = textures[self.texture_name][camera.boost - 1]
+            p_castles.add(self)
 
     def get_damage(self, hero):
         multi = 0
@@ -774,8 +812,7 @@ class Castle(pg.sprite.Sprite):
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
         time.sleep(0.3)
-        self.image = pg.transform.scale(
-            textures[self.texture_name], [128 // camera.boost, 128 // camera.boost])
+        self.image = textures[self.texture_name][camera.boost - 1]
         draw_sprites(['lines', 'highlights'])
         pg.display.flip()
         if self.cur_hp <= 0:
@@ -792,21 +829,68 @@ class Camera:
         self.boost = 2
         self.center = [960, 540]
 
-    def apply(self, obj):
-        pass
+    def move_cam(self, changes):
+        #t1 = time.time()
+        global p_land, p_castles, p_healthbars, p_heros
+        p_land = pg.sprite.Group()
+        p_heros = pg.sprite.Group()
+        p_healthbars = pg.sprite.Group()
+        p_castles = pg.sprite.Group()
+        borda.left = False
+        borda.top = False
+        scaling = 128 // camera.boost
+        for x in [heros, castles, land, highlights]:
+            for i in x:
+                i.rect.x += changes[0]
+                i.rect.y += changes[1]
+                if not (i.rect.x > width or 0 > i.rect.x + image_size or
+                        i.rect.y > height or 0 > i.rect.y + image_size):
+                    if i.__class__ == Highlight:
+                        i.change_res()
+                    else:
+                        i.image = textures[i.texture_name][self.boost - 1]
+                    if i.__class__ == Ground:
+                        p_land.add(i)
+                    if i.__class__ == Hero:
+                        if i.direction == 1:
+                            i.image = pg.transform.flip(i.image, True, False)
+                        p_heros.add(i)
+                    if i.__class__ == Castle:
+                        p_castles.add(i)
+                if i.__class__ == Ground:
+                    if not borda.left or i.rect.x < borda.left:
+                        borda.left = i.rect.x
+                    if not borda.top or i.rect.y < borda.top:
+                        borda.top = i.rect.y
+        for i in healthbars:
+            i.move()
+            if not (i.rect.x > width or 0 > i.rect.x + image_size or
+                    i.rect.y > height or 0 > i.rect.y + image_size):
+                    p_healthbars.add(i)
+        #print(time.time() - t1)
 
-    def update(self, obj):
-        a = obj.change_res()
-        if a is not None:
-            if not borda.left or a[0] < borda.left:
-                borda.left = a[0]
-            if not borda.top or a[1] < borda.top:
-                borda.top = a[1]
-        if obj.__class__ == Hero and obj.direction == 1:
-            obj.image = pg.transform.flip(obj.image, True, False)
-
-    def update_hp(self, obj):
-        obj.move()
+    def update(self):
+        global image_size
+        global p_land, p_castles, p_healthbars, p_heros
+        p_land = pg.sprite.Group()
+        p_heros = pg.sprite.Group()
+        p_healthbars = pg.sprite.Group()
+        p_castles = pg.sprite.Group()
+        image_size = 128 // camera.boost
+        borda.left = False
+        borda.top = False
+        for x in [heros, castles, land, highlights]:
+            for i in x:
+                a = i.change_res()
+                if a is not None:
+                    if not borda.left or a[0] < borda.left:
+                        borda.left = a[0]
+                    if not borda.top or a[1] < borda.top:
+                        borda.top = a[1]
+                if i.__class__ == Hero and i.direction == 1:
+                    i.image = pg.transform.flip(i.image, True, False)
+        for x in healthbars:
+            x.move()
 
     def zoom(self, pos):
         if self.boost < 5:
@@ -825,18 +909,6 @@ class Camera:
             camera.center[1] = camera.center[1] + r_y // camera.boost
             return True
         return False
-
-    def go_left(self):
-        self.center[0] += 10
-
-    def go_right(self):
-        self.center[0] -= 10
-
-    def go_up(self):
-        self.center[1] += 10
-
-    def go_down(self):
-        self.center[1] -= 10
 
 
 def end_screen(name):
@@ -866,18 +938,6 @@ def end_screen(name):
         pg.display.flip()
 
 
-def cam_update():
-    global image_size
-    image_size = 128 // camera.boost
-    borda.left = False
-    borda.top = False
-    for x in [heros, castles, land, highlights]:
-        for i in x:
-            camera.update(i)
-    for x in healthbars:
-        camera.update_hp(x)
-
-
 running = True
 
 pg.init()
@@ -885,6 +945,8 @@ width, height = size = [1920, 1080]
 #width, height = size = [1080, 720]
 screen = pg.display.set_mode(size, pg.FULLSCREEN)
 #screen = pg.display.set_mode(size)
+
+clock = pg.time.Clock()
 
 camera = Camera()
 
@@ -905,7 +967,7 @@ MYEVENTTYPE = 19
 ADDEVENT = 10
 speed = 1000
 
-pg.time.set_timer(ADDEVENT, 30)
+pg.time.set_timer(ADDEVENT, 40)
 
 pg.mouse.set_visible(True)
 
@@ -929,7 +991,7 @@ borda.create_hero(heros, [4, 0], 'trebushet', 10, 80, 1, movep=3,
                   bonus=[Bonus('siege', 2, 20)], attack_range=2)
 borda.create_castle(castles, [4, -1], 'castle', 150, 1)
 
-borda.create_hero(heros, [1, 3  ], 'cavalry', 15, 120, 2, movep=5)
+borda.create_hero(heros, [1, 3], 'cavalry', 15, 120, 2, movep=5)
 # -----------------------------------------------------------------------------------------
 borda.create_hero(heros, [1, 14], 'cavalry', 15, 120, 2, movep=5)
 borda.create_hero(heros, [7, 14], 'cavalry', 15, 120, 2, movep=5)
@@ -949,7 +1011,7 @@ borda.create_hero(heros, [4, 1], 'trebushet', 10, 80, 2, movep=3,
                   bonus=[Bonus('siege', 2, 20)], attack_range=2)
 borda.create_castle(castles, [4, 17], 'castle', 150, 2)
 
-cam_update()
+camera.update()
 
 draw_sprites()
 pg.display.flip()
@@ -971,11 +1033,11 @@ while running:
                 borda.get_click2(event.pos)
             elif event.button == 5:
                 if camera.zoom(event.pos):
-                    cam_update()
+                    camera.update()
                 borda.abort()
             elif event.button == 4:
                 if camera.unzoom(event.pos):
-                    cam_update()
+                    camera.update()
                 borda.abort()
             draw_sprites()
         if event.type == pg.MOUSEBUTTONUP:
@@ -994,21 +1056,22 @@ while running:
 
         if event.type == ADDEVENT:
             mouse_pos = pg.mouse.get_pos()
-            changed = False
+            changed = [0, 0]
+            boost = 3
             if pg.mouse.get_focused():
                 if 0 <= mouse_pos[0] < 50:
-                    camera.go_left()
-                    changed = True
+                    camera.center[0] += 10 * boost
+                    changed[0] = 10 * boost
                 if 0 <= mouse_pos[0] > width - 50:
-                    camera.go_right()
-                    changed = True
+                    camera.center[0] -= 10 * boost
+                    changed[0] = -10 * boost
                 if 0 <= mouse_pos[1] < 50:
-                    camera.go_up()
-                    changed = True
+                    camera.center[1] += 10 * boost
+                    changed[1] = 10 * boost
                 if 0 <= mouse_pos[1] > height - 50:
-                    camera.go_down()
-                    changed = True
-                if changed:
-                    cam_update()
+                    camera.center[1] -= 10 * boost
+                    changed[1] = -10 * boost
+                if changed != [0, 0]:
+                    camera.move_cam(changed)
                     draw_sprites()
         pg.display.flip()
