@@ -98,7 +98,7 @@ for i in range(image_size):
         stipa_textura[-1] = 180
         highlight.set_at((j, i), tuple(stipa_textura))
 
-mapa = load_level('map2.txt')
+mapa = load_level('map3.txt')
 print(len(mapa), len(mapa[0]))
 
 
@@ -555,6 +555,7 @@ class Hero(pg.sprite.Sprite):
         pg.display.flip()
         if self.cur_hp <= 0:
             heros.remove(self)
+            p_heros.remove(self)
             all_sprites.remove(self, self.healthbar)
             healthbars.remove(self.healthbar)
             return True
